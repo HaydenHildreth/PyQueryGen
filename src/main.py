@@ -6,6 +6,18 @@ class SQLQueryBuilder:
     def __init__(self, root):
         self.root = root
         self.root.title("SQL Query Builder")
+        
+        # --- Initialize Data ---
+        self.tables = []
+        self.columns = {}
+        self.selected_table = StringVar()
+        self.selected_columns = []
+        self.where_conditions = []
+        self.order_by_columns = []
+        self.order_by_direction = StringVar()  # "ASC" or "DESC"
+        self.limit_value = StringVar()
+        self.offset_value = StringVar()
+        self.available_columns = []
 
         # --- Database Connection ---
         self.conn = None  # Will hold the database connection
@@ -54,18 +66,6 @@ class SQLQueryBuilder:
         self.orderby_frame.pack(pady=10, fill=tk.X)
         self.limit_offset_frame.pack(pady=10, fill=tk.X) # Pack the Limit/Offset frame
         self.query_display_frame.pack(pady=10, fill=tk.X)
-
-        # --- Initialize Data ---
-        self.tables = []
-        self.columns = {}
-        self.selected_table = StringVar()
-        self.selected_columns = []
-        self.where_conditions = []
-        self.order_by_columns = []
-        self.order_by_direction = StringVar()  # "ASC" or "DESC"
-        self.limit_value = StringVar()
-        self.offset_value = StringVar()
-        self.available_columns = []
 
     def create_connection_frame(self):
         self.connection_frame = ttk.Frame(self.root)
@@ -259,7 +259,7 @@ class SQLQueryBuilder:
         if self.selected_table.get():
             query += f" FROM {self.selected_table.get()}"
         else:
-            return "SELECT * FROM ;" # Return a minimal query, but it will error.
+            return "SELECT  FROM ;" # Return a minimal query, but it will error.
 
         if self.where_conditions:
             query += " WHERE " + " AND ".join(self.where_conditions)
