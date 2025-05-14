@@ -1,343 +1,160 @@
 import tkinter as tk
-from tkinter import ttk, StringVar, BooleanVar, Listbox, Scrollbar, VERTICAL, HORIZONTAL, messagebox
-import sqlite3
+from tkinter import filedialog, messagebox, scrolledtext
+import csv
+import os
 
-class SQLQueryBuilder:
+class PythonQueryGenApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("SQL Query Builder")
-        
-        # --- Initialize Data ---
-        self.tables = []
-        self.columns = {}
-        self.selected_table = StringVar()
-        self.selected_columns = []
-        self.where_conditions = []
-        self.order_by_columns = []
-        self.order_by_direction = StringVar()  # "ASC" or "DESC"
-        self.limit_value = StringVar()
-        self.offset_value = StringVar()
-        self.available_columns = []
+        self.root.title("Python QueryGen")
+        self.root.geometry("1000x700")
 
-        # --- Database Connection ---
-        self.conn = None  # Will hold the database connection
-        self.cursor = None # Will hold the cursor
-        self.db_file = StringVar()  # Stores the database file path
-        self.create_connection_frame()
+        self.filename = None
+        self.headers = []
+        self.rows = []
+        self.column_vars = {}
 
-        # --- Query Building Frames ---
-        self.from_frame = ttk.Frame(root)
-        self.select_frame = ttk.Frame(root)
-        self.where_frame = ttk.Frame(root)
-        self.orderby_frame = ttk.Frame(root)
-        self.limit_offset_frame = ttk.Frame(root)  # New frame for LIMIT and OFFSET
-        self.create_from_frame()
-        self.create_select_frame()
-        self.create_where_frame()
-        self.create_orderby_frame()
-        self.create_limit_offset_frame() # Initialize the Limit/Offset frame
-        self.query_display_frame = ttk.Frame(root)
-        self.create_query_display_frame()
+        self.setup_ui()
 
-        # --- Status Bar ---
-        self.status_bar = tk.Label(root, text="Not Connected to Database", bd=1, relief=tk.SUNKEN, anchor=tk.W)
-        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+    def setup_ui(self):
+        # Load Button
+        tk.Button(self.root, text="Load CSV", command=self.load_csv).pack(pady=10)
 
-        # --- Menu Bar ---
-        self.menu_bar = tk.Menu(root)
-        self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
-        self.file_menu.add_command(label="Connect to Database", command=self.connect_to_database)
-        self.file_menu.add_command(label="Execute Query", command=self.execute_query)
-        self.file_menu.add_separator()
-        self.file_menu.add_command(label="Exit", command=root.quit)
-        self.menu_bar.add_cascade(label="File", menu=self.file_menu)
+        # Table name input
+        table_frame = tk.Frame(self.root)
+        table_frame.pack()
+        tk.Label(table_frame, text="Table Name:").pack(side=tk.LEFT, padx=5)
+        self.table_name_entry = tk.Entry(table_frame, width=40)
+        self.table_name_entry.pack(side=tk.LEFT)
 
-        self.help_menu = tk.Menu(self.menu_bar, tearoff=0)
-        self.help_menu.add_command(label="About", command=self.show_about_dialog)
-        self.menu_bar.add_cascade(label="Help", menu=self.help_menu)
+        # Checkboxes
+        self.checkbox_frame = tk.LabelFrame(self.root, text="Select Columns to Use", padx=10, pady=10)
+        self.checkbox_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        root.config(menu=self.menu_bar)
+        # Query selection
+        self.query_type = tk.StringVar(value="CREATE TABLE")
+        query_options = ["CREATE TABLE", "INSERT INTO", "SELECT", "UPDATE", "DELETE"]
+        tk.OptionMenu(self.root, self.query_type, *query_options).pack(pady=10)
 
-        # --- Layout ---
-        self.connection_frame.pack(pady=10)
-        self.from_frame.pack(pady=10, fill=tk.X)
-        self.select_frame.pack(pady=10, fill=tk.X)
-        self.where_frame.pack(pady=10, fill=tk.X)
-        self.orderby_frame.pack(pady=10, fill=tk.X)
-        self.limit_offset_frame.pack(pady=10, fill=tk.X) # Pack the Limit/Offset frame
-        self.query_display_frame.pack(pady=10, fill=tk.X)
+	# Generate
+        tk.Button(self.root, text="Generate SQL", command=self.generate_sql).pack(pady=10)
 
-    def create_connection_frame(self):
-        self.connection_frame = ttk.Frame(self.root)
-        ttk.Label(self.connection_frame, text="Database File:").grid(row=0, column=0, padx=5, pady=5)
-        ttk.Entry(self.connection_frame, textvariable=self.db_file, width=50).grid(row=0, column=1, padx=5, pady=5)
-        ttk.Button(self.connection_frame, text="Connect", command=self.connect_to_database).grid(row=0, column=2, padx=5, pady=5)
+        # Query output
+        self.output = scrolledtext.ScrolledText(self.root, wrap=tk.WORD, height=25)
+        self.output.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-    def create_from_frame(self):
-        ttk.Label(self.from_frame, text="FROM Table:").pack(side=tk.LEFT, padx=5)
-        self.table_combo = ttk.Combobox(self.from_frame, textvariable=self.selected_table, values=self.tables, state="disabled")
-        self.table_combo.pack(side=tk.LEFT, padx=5)
-        self.table_combo.bind("<<ComboboxSelected>>", self.populate_columns)
-
-    def create_select_frame(self):
-        ttk.Label(self.select_frame, text="SELECT Columns:").pack(side=tk.LEFT, padx=5)
-
-        self.select_listbox = Listbox(self.select_frame, selectmode=tk.MULTIPLE, width=40, height=5)
-        self.select_listbox.pack(side=tk.LEFT, padx=5, fill=tk.BOTH)
-
-        # Scrollbar for the select listbox
-        select_scrollbar = Scrollbar(self.select_frame, orient=VERTICAL, command=self.select_listbox.yview)
-        select_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
-        self.select_listbox.config(yscrollcommand=select_scrollbar.set)
-
-        # Buttons to add/remove columns
-        select_button_frame = ttk.Frame(self.select_frame)
-        ttk.Button(select_button_frame, text="Add", command=self.add_selected_columns).pack(side=tk.TOP, padx=5, pady=2)
-        ttk.Button(select_button_frame, text="Remove", command=self.remove_selected_columns).pack(side=tk.TOP, padx=5, pady=2)
-        select_button_frame.pack(side=tk.LEFT)
-
-    def create_where_frame(self):
-        ttk.Label(self.where_frame, text="WHERE Conditions:").pack(side=tk.LEFT, padx=5)
-
-        self.where_listbox = Listbox(self.where_frame, width=50, height=5)
-        self.where_listbox.pack(side=tk.LEFT, padx=5, fill=tk.BOTH)
-
-        # Scrollbar for the where listbox
-        where_scrollbar = Scrollbar(self.where_frame, orient=VERTICAL, command=self.where_listbox.yview)
-        where_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
-        self.where_listbox.config(yscrollcommand=where_scrollbar.set)
-
-        self.where_entry = ttk.Entry(self.where_frame, width=30)
-        self.where_entry.pack(side=tk.LEFT, padx=5)
-        ttk.Button(self.where_frame, text="Add Condition", command=self.add_where_condition).pack(side=tk.LEFT, padx=5)
-        ttk.Button(self.where_frame, text="Remove Condition", command=self.remove_where_condition).pack(side=tk.LEFT, padx=5)
-
-    def create_orderby_frame(self):
-        ttk.Label(self.orderby_frame, text="ORDER BY:").pack(side=tk.LEFT, padx=5)
-
-        self.orderby_listbox = Listbox(self.orderby_frame, selectmode=tk.MULTIPLE, width=40, height=5)
-        self.orderby_listbox.pack(side=tk.LEFT, padx=5, fill=tk.BOTH)
-
-        # Scrollbar for the orderby listbox
-        orderby_scrollbar = Scrollbar(self.orderby_frame, orient=VERTICAL, command=self.orderby_listbox.yview)
-        orderby_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
-        self.orderby_listbox.config(yscrollcommand=orderby_scrollbar.set)
-
-        self.order_by_direction.set("ASC")  # Default to ascending
-        self.asc_radio = ttk.Radiobutton(self.orderby_frame, text="ASC", variable=self.order_by_direction, value="ASC")
-        self.desc_radio = ttk.Radiobutton(self.orderby_frame, text="DESC", variable=self.order_by_direction, value="DESC")
-        self.asc_radio.pack(side=tk.LEFT, padx=5)
-        self.desc_radio.pack(side=tk.LEFT, padx=5)
-
-        # Add/Remove buttons for Order By
-        order_button_frame = ttk.Frame(self.orderby_frame)
-        ttk.Button(order_button_frame, text="Add", command=self.add_order_by_columns).pack(side=tk.TOP, padx=5, pady=2)
-        ttk.Button(order_button_frame, text="Remove", command=self.remove_order_by_columns).pack(side=tk.TOP, padx=5, pady=2)
-        order_button_frame.pack(side=tk.LEFT)
-
-    def create_limit_offset_frame(self):
-        ttk.Label(self.limit_offset_frame, text="LIMIT").pack(side=tk.LEFT, padx=5)
-        ttk.Entry(self.limit_offset_frame, textvariable=self.limit_value, width=10).pack(side=tk.LEFT, padx=5)
-        ttk.Label(self.limit_offset_frame, text="OFFSET").pack(side=tk.LEFT, padx=5)
-        ttk.Entry(self.limit_offset_frame, textvariable=self.offset_value, width=10).pack(side=tk.LEFT, padx=5)
-
-    def create_query_display_frame(self):
-        ttk.Label(self.query_display_frame, text="Generated Query:").pack(side=tk.TOP, padx=5)
-        self.query_text = tk.Text(self.query_display_frame, height=5, width=80)
-        self.query_text.pack(side=tk.LEFT, padx=5, fill=tk.BOTH)
-        query_scrollbar = Scrollbar(self.query_display_frame, orient=VERTICAL, command=self.query_text.yview)
-        query_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
-        self.query_text.config(yscrollcommand=query_scrollbar.set)
-
-    def connect_to_database(self):
-        db_file = self.db_file.get()
-        if not db_file:
-            messagebox.showerror("Error", "Please enter a database file path.")
-            self.status_bar.config(text="No Database Selected")
+    def load_csv(self):
+        self.filename = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+        if not self.filename:
             return
 
         try:
-            self.conn = sqlite3.connect(db_file)
-            self.cursor = self.conn.cursor()
-            self.status_bar.config(text=f"Connected to {db_file}")
-            self.populate_tables()  # Populate the table list
-        except sqlite3.Error as e:
-            messagebox.showerror("Connection Error", f"Error connecting to database: {e}")
-            self.status_bar.config(text="Connection Failed")
-            self.conn = None
-            self.cursor = None
+            with open(self.filename, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                self.headers = next(reader)
+                self.rows = [row for row in reader if any(row)]
 
-    def populate_tables(self):
-        if self.cursor:
-            try:
-                self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-                self.tables = [row[0] for row in self.cursor.fetchall()]
-                self.table_combo['values'] = self.tables
-                self.table_combo['state'] = 'readonly' # Enable the combobox
-                if self.tables:
-                  self.selected_table.set(self.tables[0])  # Set a default table
-                  self.populate_columns()
-            except sqlite3.Error as e:
-                messagebox.showerror("Error", f"Error fetching tables: {e}")
-        else:
-            messagebox.showerror("Error", "Not connected to a database.")
+            # This sets table name equal to .CSV name
+            base_name = os.path.splitext(os.path.basename(self.filename))[0]
+            self.table_name_entry.delete(0, tk.END)
+            self.table_name_entry.insert(0, base_name)
 
-    def populate_columns(self, event=None):
-        table_name = self.selected_table.get()
-        if self.cursor and table_name:
-            try:
-                self.cursor.execute(f"PRAGMA table_info({table_name})")
-                self.available_columns = [row[1] for row in self.cursor.fetchall()]
-                self.columns = self.available_columns
-                self.select_listbox.delete(0, tk.END)  # Clear previous columns
-                self.orderby_listbox.delete(0, tk.END)
-                for col in self.columns:
-                    self.select_listbox.insert(tk.END, col)
-                    self.orderby_listbox.insert(tk.END, col)
-            except sqlite3.Error as e:
-                messagebox.showerror("Error", f"Error fetching columns: {e}")
-        elif not self.cursor:
-             messagebox.showerror("Error", "Not connected to a database.")
+            # Clear checkboxes
+            for widget in self.checkbox_frame.winfo_children():
+                widget.destroy()
 
-    def add_selected_columns(self):
-        selected_indices = self.select_listbox.curselection()
-        for i in selected_indices:
-            col = self.columns[i]
-            if col not in self.selected_columns:
-                self.selected_columns.append(col)
-        self.update_query_display()
+            # Create new checkboxes
+            self.column_vars.clear()
+            for col in self.headers:
+                var = tk.BooleanVar(value=True)
+                self.column_vars[col] = var
+                tk.Checkbutton(self.checkbox_frame, text=col, variable=var).pack(side=tk.LEFT)
 
-    def remove_selected_columns(self):
-        selected_indices = self.select_listbox.curselection()
-        # Iterate in reverse order to avoid index issues when removing elements
-        for i in sorted(selected_indices, reverse=True):
-            col = self.columns[i]
-            if col in self.selected_columns:
-                self.selected_columns.remove(col)
-        self.update_query_display()
+            messagebox.showinfo("CSV Loaded", f"Loaded {len(self.rows)} rows from {base_name}.csv")
 
-    def add_where_condition(self):
-        condition = self.where_entry.get()
-        if condition:
-            self.where_conditions.append(condition)
-            self.where_listbox.insert(tk.END, condition)
-            self.where_entry.delete(0, tk.END)
-            self.update_query_display()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to read CSV: {e}")
 
-    def remove_where_condition(self):
-        selected_index = self.where_listbox.curselection()
-        if selected_index:
-            condition = self.where_listbox.get(selected_index[0])  # Get the condition string
-            self.where_conditions.remove(condition)  # Remove it from the list
-            self.where_listbox.delete(selected_index[0])
-            self.update_query_display()
+    def get_selected_columns(self):
+        return [col for col, var in self.column_vars.items() if var.get()]
 
-    def add_order_by_columns(self):
-        selected_indices = self.orderby_listbox.curselection()
-        for i in selected_indices:
-            col = self.columns[i]
-            if col not in self.order_by_columns:
-                self.order_by_columns.append(col)
-        self.update_query_display()
+    def escape_value(self, value):
+        return value.replace("'", "''")
 
-    def remove_order_by_columns(self):
-        selected_indices = self.orderby_listbox.curselection()
-         # Iterate in reverse order to avoid index issues when removing elements
-        for i in sorted(selected_indices, reverse=True):
-            col = self.columns[i]
-            if col in self.order_by_columns:
-                self.order_by_columns.remove(col)
-        self.update_query_display()
+    def generate_create_query(self, table_name, columns):
+        fields = [f"{col} TEXT" for col in columns]
+        return f"CREATE TABLE {table_name} (\n  " + ",\n  ".join(fields) + "\n);"
 
-    def build_query(self):
-        query = "SELECT "
-        if self.selected_columns:
-            query += ", ".join(self.selected_columns)
-        else:
-            query += "*"  # Default to all columns if none selected
+    def generate_insert_query(self, table_name, columns):
+        lines = []
+        col_indexes = [self.headers.index(col) for col in columns]
+        for row in self.rows:
+            values = ", ".join(f"'{self.escape_value(row[i])}'" for i in col_indexes)
+            lines.append(f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({values});")
+        return "\n".join(lines)
 
-        if self.selected_table.get():
-            query += f" FROM {self.selected_table.get()}"
-        else:
-            return "SELECT * FROM ;" # Return a minimal query, but it will error.
+    def generate_select_query(self, table_name, columns):
+        return f"SELECT {', '.join(columns)} FROM {table_name};"
 
-        if self.where_conditions:
-            query += " WHERE " + " AND ".join(self.where_conditions)
+    def generate_update_query(self, table_name, columns):
+        col_indexes = [self.headers.index(col) for col in columns]
+        queries = []
+        for i, row in enumerate(self.rows):
+            set_clause = ", ".join(
+                f"{col} = '{self.escape_value(row[self.headers.index(col)])}'"
+                for col in columns
+            )
+            where_clause = " AND ".join(
+                f"{col} = '{self.escape_value(row[self.headers.index(col)])}'"
+                for col in columns
+            )
+            queries.append(f"\nUPDATE {table_name} SET {set_clause} WHERE {where_clause};")
+        return "\n".join(queries)
 
-        if self.order_by_columns:
-            query += f" ORDER BY " + ", ".join(self.order_by_columns) + f" {self.order_by_direction.get()}"
+    def generate_delete_query(self, table_name, columns):
+        queries = []
+        for i, row in enumerate(self.rows):
+            where_clause = " AND ".join(
+                f"{col} = '{self.escape_value(row[self.headers.index(col)])}'"
+                for col in columns
+            )
+            queries.append(f"\nDELETE FROM {table_name} WHERE {where_clause};")
+        return "\n".join(queries)
 
-        if self.limit_value.get():
-            query += f" LIMIT {self.limit_value.get()}"
-        if self.offset_value.get():
-            query += f" OFFSET {self.offset_value.get()}"
-
-        query += ";"
-        return query
-
-    def update_query_display(self):
-        query = self.build_query()
-        self.query_text.delete("1.0", tk.END)
-        self.query_text.insert(tk.END, query)
-
-    def execute_query(self):
-        if not self.cursor:
-            messagebox.showerror("Error", "Not connected to a database.")
+    def generate_sql(self):
+        if not self.headers or not self.rows:
+            messagebox.showwarning("No Data", "Please load a CSV file first.")
             return
 
-        query = self.build_query()
-        try:
-            self.cursor.execute(query)
-            results = self.cursor.fetchall()
-            if results:
-                # Display results in a new window
-                self.display_results(results)
-            else:
-                messagebox.showinfo("Success", "Query executed successfully. No results returned.")
+        selected_cols = self.get_selected_columns()
+        if not selected_cols:
+            messagebox.showwarning("No Columns", "Please select at least one column.")
+            return
 
-        except sqlite3.Error as e:
-            messagebox.showerror("Query Error", f"Error executing query: {e}")
+        table_name = self.table_name_entry.get().strip()
+        if not table_name:
+            messagebox.showwarning("Table Name", "Please enter a table name.")
+            return
 
-    def display_results(self, results):
-        results_window = tk.Toplevel(self.root)
-        results_window.title("Query Results")
+        query_type = self.query_type.get()
+        if query_type == "CREATE TABLE":
+            sql = self.generate_create_query(table_name, selected_cols)
+        elif query_type == "INSERT INTO":
+            sql = self.generate_insert_query(table_name, selected_cols)
+        elif query_type == "SELECT":
+            sql = self.generate_select_query(table_name, selected_cols)
+        elif query_type == "UPDATE":
+            sql = self.generate_update_query(table_name, selected_cols)
+        elif query_type == "DELETE":
+            sql = self.generate_delete_query(table_name, selected_cols)
+        else:
+            sql = "-- Unsupported query type"
 
-        # Determine number of columns
-        num_cols = len(results[0]) if results else 0
+        self.output.delete("1.0", tk.END)
+        self.output.insert(tk.END, sql)
 
-        # Get column names (if possible - depends on the query)
-        column_names = [description[0] for description in self.cursor.description] if self.cursor.description else [f"Column {i+1}" for i in range(num_cols)]
-
-        # Create Treeview widget to display results
-        tree = ttk.Treeview(results_window, cols=column_names, show="headings")
-
-        # Define column headings
-        for col in column_names:
-            tree.heading(col, text=col)
-            tree.column(col, width=100)  # Adjust width as needed
-
-        # Insert data into the Treeview
-        for row in results:
-            tree.insert("", tk.END, values=row)
-
-        tree.pack(expand=True, fill=tk.BOTH)
-
-    def show_about_dialog(self):
-        messagebox.showinfo("About SQL Query Builder",
-                            "Version 0.1\n\n"
-                            "A simple SQL Query Builder using Tkinter.\n"
-                            "Created by Hayden Hildreth.")
-
-    def close_connection(self):
-        if self.conn:
-            self.conn.close()
-            self.conn = None
-            self.cursor = None
-            self.status_bar.config(text="Disconnected")
-            messagebox.showinfo("Disconnected", "Successfully disconnected from the database.")
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = SQLQueryBuilder(root)
-    root.protocol("WM_DELETE_WINDOW", app.close_connection) # Close DB connection on exit
+    app = PythonQueryGenApp(root)
     root.mainloop()
