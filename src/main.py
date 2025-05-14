@@ -43,6 +43,17 @@ class PythonQueryGenApp:
         self.output = scrolledtext.ScrolledText(self.root, wrap=tk.WORD, height=25)
         self.output.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
+        # Menu Bar
+        self.menu_bar = tk.Menu(root)
+        self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.file_menu.add_command(label="Exit", command=root.quit)
+
+        self.help_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.help_menu.add_command(label="About", command=self.show_about_dialog)
+        self.menu_bar.add_cascade(label="Help", menu=self.help_menu)
+
+        root.config(menu=self.menu_bar)
+
     def load_csv(self):
         self.filename = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
         if not self.filename:
@@ -152,6 +163,13 @@ class PythonQueryGenApp:
 
         self.output.delete("1.0", tk.END)
         self.output.insert(tk.END, sql)
+
+    # Help box popup
+    def show_about_dialog(self):
+        messagebox.showinfo("About SQL Query Builder",
+                            "Version 1.0\n\n"
+                            "A simple SQL Query Builder using Tkinter.\n"
+                            "Created by Hayden Hildreth.")
 
 
 if __name__ == "__main__":
