@@ -259,7 +259,7 @@ class SQLQueryBuilder:
         if self.selected_table.get():
             query += f" FROM {self.selected_table.get()}"
         else:
-            return "SELECT  FROM ;" # Return a minimal query, but it will error.
+            return "SELECT * FROM ;" # Return a minimal query, but it will error.
 
         if self.where_conditions:
             query += " WHERE " + " AND ".join(self.where_conditions)
@@ -324,7 +324,7 @@ class SQLQueryBuilder:
 
     def show_about_dialog(self):
         messagebox.showinfo("About SQL Query Builder",
-                            "Version 1.0\n\n"
+                            "Version 0.1\n\n"
                             "A simple SQL Query Builder using Tkinter.\n"
                             "Created by Hayden Hildreth.")
 
