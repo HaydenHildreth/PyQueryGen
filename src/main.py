@@ -166,7 +166,7 @@ class PythonQueryGenApp:
 
     # Help box popup
     def show_about_dialog(self):
-        messagebox.showinfo("About SQL Query Builder",
+        messagebox.showinfo("About Python QueryGen",
                             "Version 0.2\n\n"
                             "A simple SQL Query Builder using Python's Tkinter.\n"
                             "Created by Hayden Hildreth.")
