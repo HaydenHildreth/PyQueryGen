@@ -167,10 +167,9 @@ class PythonQueryGenApp:
     # Help box popup
     def show_about_dialog(self):
         messagebox.showinfo("About SQL Query Builder",
-                            "Version 1.0\n\n"
-                            "A simple SQL Query Builder using Tkinter.\n"
+                            "Version 0.2\n\n"
+                            "A simple SQL Query Builder using Python's Tkinter.\n"
                             "Created by Hayden Hildreth.")
-
 
 if __name__ == "__main__":
     root = tk.Tk()
