@@ -119,7 +119,7 @@ class PythonQueryGenApp:
                 f"{col} = '{self.escape_value(row[self.headers.index(col)])}'"
                 for col in columns
             )
-            queries.append(f"\nUPDATE {table_name} SET {set_clause} WHERE {where_clause};")
+            queries.append(f"UPDATE {table_name} SET {set_clause} WHERE {where_clause};")
         return "\n".join(queries)
 
     def generate_delete_query(self, table_name, columns):
@@ -129,7 +129,7 @@ class PythonQueryGenApp:
                 f"{col} = '{self.escape_value(row[self.headers.index(col)])}'"
                 for col in columns
             )
-            queries.append(f"\nDELETE FROM {table_name} WHERE {where_clause};")
+            queries.append(f"DELETE FROM {table_name} WHERE {where_clause};")
         return "\n".join(queries)
 
     def generate_sql(self):
