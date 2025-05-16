@@ -1,1 +1,1 @@
-# PythonQueryGenerator
+# PyQueryGen
