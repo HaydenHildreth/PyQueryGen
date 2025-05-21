@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
 import csv
 import os
+import webbrowser
 
 class PythonQueryGenApp:
     def __init__(self, root):
@@ -27,16 +28,33 @@ class PythonQueryGenApp:
         self.table_name_entry = tk.Entry(table_frame, width=40)
         self.table_name_entry.pack(side=tk.LEFT)
 
-        # Checkboxes
-        self.checkbox_frame = tk.LabelFrame(self.root, text="Select Columns to Use", padx=10, pady=10)
-        self.checkbox_frame.pack(fill=tk.X, padx=10, pady=5)
+        # Scrollable Checkboxes Frame
+        outer_frame = tk.LabelFrame(self.root, text="Select Columns to Use", padx=10, pady=10)
+        outer_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        canvas = tk.Canvas(outer_frame, height=80)
+        canvas.pack(side=tk.TOP, fill=tk.X, expand=True)
+
+        h_scroll = tk.Scrollbar(outer_frame, orient=tk.HORIZONTAL, command=canvas.xview)
+        h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+        canvas.configure(xscrollcommand=h_scroll.set)
+
+        # Create an inner frame to hold checkboxes
+        self.checkbox_frame = tk.Frame(canvas)
+        self.checkbox_window = canvas.create_window((0, 0), window=self.checkbox_frame, anchor='nw')
+
+        # Update scrollregion when contents change
+        def update_scrollregion(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        self.checkbox_frame.bind("<Configure>", update_scrollregion)
 
         # Query selection
         self.query_type = tk.StringVar(value="CREATE TABLE")
         query_options = ["CREATE TABLE", "INSERT INTO", "SELECT", "UPDATE", "DELETE"]
         tk.OptionMenu(self.root, self.query_type, *query_options).pack(pady=10)
 
-	# Generate
+        # Generate
         tk.Button(self.root, text="Generate SQL", command=self.generate_sql).pack(pady=10)
 
         # Query output
@@ -45,13 +63,20 @@ class PythonQueryGenApp:
 
         # Menu Bar
         self.menu_bar = tk.Menu(root)
-        self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
-        self.file_menu.add_command(label="Exit", command=root.quit)
+        
+        # File section of Menu Bar
+        self.file = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="File", menu=self.file)
+        self.file.add_separator()
+        self.file.add_command(label="Exit", command=root.destroy)
+        
+        # Help and About section of Menu Bar
+        self.help = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="Help", menu=self.help)
+        self.help.add_command(label="Help", command=self.open_help_dialog)
+        self.help.add_command(label="About", command=self.show_about_dialog)
 
-        self.help_menu = tk.Menu(self.menu_bar, tearoff=0)
-        self.help_menu.add_command(label="About", command=self.show_about_dialog)
-        self.menu_bar.add_cascade(label="Help", menu=self.help_menu)
-
+        # Display Menu Bar
         root.config(menu=self.menu_bar)
 
     def load_csv(self):
@@ -73,6 +98,13 @@ class PythonQueryGenApp:
             # Clear checkboxes
             for widget in self.checkbox_frame.winfo_children():
                 widget.destroy()
+                
+                # Create new checkboxes
+                self.column_vars.clear()
+                for col in self.headers:
+                    var = tk.BooleanVar(value=True)
+                    self.column_vars[col] = var
+                    tk.Checkbutton(self.checkbox_frame, text=col, variable=var).pack(side=tk.LEFT)
 
             # Create new checkboxes
             self.column_vars.clear()
@@ -164,12 +196,20 @@ class PythonQueryGenApp:
         self.output.delete("1.0", tk.END)
         self.output.insert(tk.END, sql)
 
-    # Help box popup
+    # About box popup
     def show_about_dialog(self):
         messagebox.showinfo("About Python QueryGen",
-                            "Version 0.2\n\n"
+                            "Version 0.4\n\n"
                             "A simple SQL Query Builder using Python's Tkinter.\n"
                             "Created by Hayden Hildreth.")
+                            
+    # Help box popup
+    def open_help_dialog(self):
+        self.help_link = 'https://github.com/HaydenHildreth/PyQueryGen/'
+        webbrowser.open_new_tab(self.help_link)
+        messagebox.showinfo("Help opened",
+                            "A tab with our user documentation has been\n"
+                            "opened in your default browser.")
 
 if __name__ == "__main__":
     root = tk.Tk()
