@@ -98,13 +98,6 @@ class PythonQueryGenApp:
             # Clear checkboxes
             for widget in self.checkbox_frame.winfo_children():
                 widget.destroy()
-                
-                # Create new checkboxes
-                self.column_vars.clear()
-                for col in self.headers:
-                    var = tk.BooleanVar(value=True)
-                    self.column_vars[col] = var
-                    tk.Checkbutton(self.checkbox_frame, text=col, variable=var).pack(side=tk.LEFT)
 
             # Create new checkboxes
             self.column_vars.clear()
@@ -199,7 +192,7 @@ class PythonQueryGenApp:
     # About box popup
     def show_about_dialog(self):
         messagebox.showinfo("About Python QueryGen",
-                            "Version 0.4\n\n"
+                            "Version 0.5\n\n"
                             "A simple SQL Query Builder using Python's Tkinter.\n"
                             "Created by Hayden Hildreth.")
                             
