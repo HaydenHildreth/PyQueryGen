@@ -18,7 +18,7 @@ git clone https://github.com/HaydenHildreth/PyQueryGen.git
 
 * Open your terminal and change directory to the correct folder:
 ```
-cd <path-to-repo>\
+cd <path-to-repo>\src\
 ```
 
 * Run main script:
@@ -36,7 +36,7 @@ git clone https://github.com/HaydenHildreth/PyQueryGen.git
 
 * Open your terminal and change directory to the correct folder:
 ```
-cd <path-to-repo>\
+cd <path-to-repo>\src\
 ```
 
 * Run main script:
@@ -54,7 +54,7 @@ git clone https://github.com/HaydenHildreth/PyQueryGen.git
 
 * Open your terminal and change directory to the correct folder:
 ```
-cd <path-to-repo>\
+cd <path-to-repo>\src\
 ```
 
 * Run main script:
