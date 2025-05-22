@@ -4,7 +4,8 @@
 A simple, and easy to use program to quickly write SQL scripts from a .CSV file. The .CSV file should be modified **ahead of time** so that the data is ready to be imported, updated, deleted, etc... This program is not for **modifying** database data, simply for building the scripts to enter, update, delete, etc. data from the database.
 
 ## Screenshots
-Coming soon
+![Screenshot 1](/assets/images/preview1.png "Insert Query")
+![Screenshot 2](/assets/images/preview2.png "Insert Query")
 
 ## How to use it?
 ### Windows
