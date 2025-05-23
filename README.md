@@ -7,7 +7,7 @@ A simple, and easy to use program to quickly write SQL scripts from a .CSV file.
 ![Screenshot 1](/assets/images/preview1.png "Insert Query")
 ![Screenshot 2](/assets/images/preview2.png "Insert Query")
 
-## How to use it?
+## Install
 ### Windows
 Make sure you have [Python](https://www.python.org/downloads/) installed. Users can copy/download the repository and skip cloning the repository, or [install git](https://git-scm.com/download/win) and follow the instructions below.
 
