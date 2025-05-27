@@ -7,13 +7,14 @@ import webbrowser
 class PythonQueryGenApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Python QueryGen")
+        self.root.title("Python QueryGen v0.6")
         self.root.geometry("1000x700")
 
         self.filename = None
         self.headers = []
         self.rows = []
         self.column_vars = {}
+        self.where_column_vars = {}
 
         self.setup_ui()
 
@@ -39,45 +40,59 @@ class PythonQueryGenApp:
         h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
         canvas.configure(xscrollcommand=h_scroll.set)
 
-        # Create an inner frame to hold checkboxes
         self.checkbox_frame = tk.Frame(canvas)
-        self.checkbox_window = canvas.create_window((0, 0), window=self.checkbox_frame, anchor='nw')
+        canvas.create_window((0, 0), window=self.checkbox_frame, anchor='nw')
+        self.checkbox_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
 
-        # Update scrollregion when contents change
-        def update_scrollregion(event):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        self.checkbox_frame.bind("<Configure>", update_scrollregion)
-
-        # Query selection
+        # Query selection dropdown
         self.query_type = tk.StringVar(value="CREATE TABLE")
         query_options = ["CREATE TABLE", "INSERT INTO", "SELECT", "UPDATE", "DELETE"]
-        tk.OptionMenu(self.root, self.query_type, *query_options).pack(pady=10)
+        query_menu = tk.OptionMenu(self.root, self.query_type, *query_options, command=self.on_query_type_change)
+        query_menu.pack(pady=10)
 
-        # Generate
-        tk.Button(self.root, text="Generate SQL", command=self.generate_sql).pack(pady=10)
+        # WHERE Clause Frame (initially hidden)
+        self.where_clause_frame_outer = tk.LabelFrame(self.root, text="Select Columns for WHERE Clause (UPDATE only)", padx=10, pady=10)
 
-        # Query output
+        self.where_clause_canvas = tk.Canvas(self.where_clause_frame_outer, height=60)
+        self.where_clause_canvas.pack(side=tk.TOP, fill=tk.X, expand=True)
+
+        h_scroll_where = tk.Scrollbar(self.where_clause_frame_outer, orient=tk.HORIZONTAL, command=self.where_clause_canvas.xview)
+        h_scroll_where.pack(side=tk.BOTTOM, fill=tk.X)
+        self.where_clause_canvas.configure(xscrollcommand=h_scroll_where.set)
+
+        self.where_clause_inner = tk.Frame(self.where_clause_canvas)
+        self.where_clause_canvas.create_window((0, 0), window=self.where_clause_inner, anchor='nw')
+        self.where_clause_inner.bind("<Configure>", lambda e: self.where_clause_canvas.configure(scrollregion=self.where_clause_canvas.bbox("all")))
+
+        # Pack WHERE clause section (but it will be shown/hidden dynamically)
+        self.where_clause_frame_outer.pack_forget()
+
+        # Generate SQL button
+        self.generate_button = tk.Button(self.root, text="Generate SQL", command=self.generate_sql)
+        self.generate_button.pack(pady=10)
+
+        # Output textbox
         self.output = scrolledtext.ScrolledText(self.root, wrap=tk.WORD, height=25)
         self.output.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Menu Bar
-        self.menu_bar = tk.Menu(root)
-        
-        # File section of Menu Bar
+        self.menu_bar = tk.Menu(self.root)
         self.file = tk.Menu(self.menu_bar, tearoff=0)
         self.menu_bar.add_cascade(label="File", menu=self.file)
         self.file.add_separator()
-        self.file.add_command(label="Exit", command=root.destroy)
-        
-        # Help and About section of Menu Bar
+        self.file.add_command(label="Exit", command=self.root.destroy)
+
         self.help = tk.Menu(self.menu_bar, tearoff=0)
         self.menu_bar.add_cascade(label="Help", menu=self.help)
         self.help.add_command(label="Help", command=self.open_help_dialog)
         self.help.add_command(label="About", command=self.show_about_dialog)
+        self.root.config(menu=self.menu_bar)
 
-        # Display Menu Bar
-        root.config(menu=self.menu_bar)
+    def on_query_type_change(self, value):
+        if value == "UPDATE":
+            self.where_clause_frame_outer.pack(fill=tk.X, padx=10, pady=5, before=self.generate_button)
+        else:
+            self.where_clause_frame_outer.pack_forget()
 
     def load_csv(self):
         self.filename = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
@@ -90,7 +105,6 @@ class PythonQueryGenApp:
                 self.headers = next(reader)
                 self.rows = [row for row in reader if any(row)]
 
-            # This sets table name equal to .CSV name
             base_name = os.path.splitext(os.path.basename(self.filename))[0]
             self.table_name_entry.delete(0, tk.END)
             self.table_name_entry.insert(0, base_name)
@@ -98,13 +112,19 @@ class PythonQueryGenApp:
             # Clear checkboxes
             for widget in self.checkbox_frame.winfo_children():
                 widget.destroy()
+            for widget in self.where_clause_inner.winfo_children():
+                widget.destroy()
 
-            # Create new checkboxes
             self.column_vars.clear()
+            self.where_column_vars.clear()
+
             for col in self.headers:
                 var = tk.BooleanVar(value=True)
+                where_var = tk.BooleanVar(value=True)
                 self.column_vars[col] = var
+                self.where_column_vars[col] = where_var
                 tk.Checkbutton(self.checkbox_frame, text=col, variable=var).pack(side=tk.LEFT)
+                tk.Checkbutton(self.where_clause_inner, text=col, variable=where_var).pack(side=tk.LEFT)
 
             messagebox.showinfo("CSV Loaded", f"Loaded {len(self.rows)} rows from {base_name}.csv")
 
@@ -113,6 +133,9 @@ class PythonQueryGenApp:
 
     def get_selected_columns(self):
         return [col for col, var in self.column_vars.items() if var.get()]
+
+    def get_where_clause_columns(self):
+        return [col for col, var in self.where_column_vars.items() if var.get()]
 
     def escape_value(self, value):
         return value.replace("'", "''")
@@ -132,24 +155,24 @@ class PythonQueryGenApp:
     def generate_select_query(self, table_name, columns):
         return f"SELECT {', '.join(columns)} FROM {table_name};"
 
-    def generate_update_query(self, table_name, columns):
+    def generate_update_query(self, table_name, columns, where_columns):
         col_indexes = [self.headers.index(col) for col in columns]
         queries = []
-        for i, row in enumerate(self.rows):
+        for row in self.rows:
             set_clause = ", ".join(
                 f"{col} = '{self.escape_value(row[self.headers.index(col)])}'"
                 for col in columns
             )
             where_clause = " AND ".join(
                 f"{col} = '{self.escape_value(row[self.headers.index(col)])}'"
-                for col in columns
+                for col in where_columns
             )
             queries.append(f"UPDATE {table_name} SET {set_clause} WHERE {where_clause};")
         return "\n".join(queries)
 
     def generate_delete_query(self, table_name, columns):
         queries = []
-        for i, row in enumerate(self.rows):
+        for row in self.rows:
             where_clause = " AND ".join(
                 f"{col} = '{self.escape_value(row[self.headers.index(col)])}'"
                 for col in columns
@@ -180,7 +203,11 @@ class PythonQueryGenApp:
         elif query_type == "SELECT":
             sql = self.generate_select_query(table_name, selected_cols)
         elif query_type == "UPDATE":
-            sql = self.generate_update_query(table_name, selected_cols)
+            where_cols = self.get_where_clause_columns()
+            if not where_cols:
+                messagebox.showwarning("No WHERE Columns", "Please select at least one column for the WHERE clause.")
+                return
+            sql = self.generate_update_query(table_name, selected_cols, where_cols)
         elif query_type == "DELETE":
             sql = self.generate_delete_query(table_name, selected_cols)
         else:
@@ -189,17 +216,14 @@ class PythonQueryGenApp:
         self.output.delete("1.0", tk.END)
         self.output.insert(tk.END, sql)
 
-    # About box popup
     def show_about_dialog(self):
         messagebox.showinfo("About Python QueryGen",
-                            "Version 0.5\n\n"
+                            "Version 0.6\n\n"
                             "A simple SQL Query Builder using Python's Tkinter.\n"
                             "Created by Hayden Hildreth.")
-                            
-    # Help box popup
+
     def open_help_dialog(self):
-        self.help_link = 'https://github.com/HaydenHildreth/PyQueryGen/'
-        webbrowser.open_new_tab(self.help_link)
+        webbrowser.open_new_tab("https://github.com/HaydenHildreth/PyQueryGen/")
         messagebox.showinfo("Help opened",
                             "A tab with our user documentation has been\n"
                             "opened in your default browser.")
