@@ -61,3 +61,6 @@ cd <path-to-repo>\src\
 ```
 python main.py
 ```
+
+## How to use
+See [USAGE.md](https://github.com/HaydenHildreth/PyQueryGen/blob/main/assets/documentation/USAGE.md)
