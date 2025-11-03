@@ -3,11 +3,16 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 import csv
 import os
 import webbrowser
+try:
+    import openpyxl
+    XLSX_AVAILABLE = True
+except ImportError:
+    XLSX_AVAILABLE = False
 
 class PythonQueryGenApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Python QueryGen v0.7")
+        self.root.title("Python QueryGen v0.8")
         self.root.geometry("1000x700")
 
         self.filename = None
@@ -21,7 +26,7 @@ class PythonQueryGenApp:
 
     def setup_ui(self):
         # Load Button
-        tk.Button(self.root, text="Load CSV", command=self.load_csv).pack(pady=10)
+        tk.Button(self.root, text="Load CSV/XLSX", command=self.load_file).pack(pady=10)
 
         # Table name input
         table_frame = tk.Frame(self.root)
@@ -100,46 +105,113 @@ class PythonQueryGenApp:
             self.where_clause_frame_outer.pack_forget()
             self.edit_values_button.pack_forget()
 
-    def load_csv(self):
-        self.filename = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+    def load_xlsx(self, filename):
+        """Load data from XLSX file"""
+        if not XLSX_AVAILABLE:
+            messagebox.showerror("Missing Library", 
+                               "openpyxl is required to read XLSX files.\n"
+                               "Install it with: pip install openpyxl")
+            return None, None
+
+        try:
+            workbook = openpyxl.load_workbook(filename, read_only=True, data_only=True)
+            sheet = workbook.active
+            
+            # Get headers from first row
+            headers = []
+            for cell in sheet[1]:
+                value = cell.value
+                headers.append(str(value) if value is not None else "")
+            
+            # Get data rows
+            rows = []
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                # Convert all values to strings and filter empty rows
+                row_data = [str(cell) if cell is not None else "" for cell in row]
+                if any(row_data):  # Only add non-empty rows
+                    rows.append(row_data)
+            
+            workbook.close()
+            return headers, rows
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to read XLSX: {e}")
+            return None, None
+
+    def load_csv(self, filename):
+        """Load data from CSV file"""
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                headers = next(reader)
+                rows = [row for row in reader if any(row)]
+            return headers, rows
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to read CSV: {e}")
+            return None, None
+
+    def load_file(self):
+        """Load either CSV or XLSX file"""
+        if XLSX_AVAILABLE:
+            filetypes = [
+                ("All Supported Files", "*.csv;*.xlsx"),
+                ("Excel Files", "*.xlsx"),
+                ("CSV Files", "*.csv"),
+                ("All Files", "*.*")
+            ]
+        else:
+            filetypes = [
+                ("CSV Files", "*.csv"),
+                ("All Files", "*.*")
+            ]
+        
+        self.filename = filedialog.askopenfilename(
+            title="Select CSV or Excel File",
+            filetypes=filetypes
+        )
         if not self.filename:
             return
 
-        try:
-            with open(self.filename, 'r', encoding='utf-8') as f:
-                reader = csv.reader(f)
-                self.headers = next(reader)
-                self.rows = [row for row in reader if any(row)]
+        # Determine file type and load accordingly
+        file_ext = os.path.splitext(self.filename)[1].lower()
+        
+        if file_ext == '.xlsx':
+            self.headers, self.rows = self.load_xlsx(self.filename)
+        elif file_ext == '.csv':
+            self.headers, self.rows = self.load_csv(self.filename)
+        else:
+            messagebox.showerror("Error", "Unsupported file type. Please select a CSV or XLSX file.")
+            return
 
-            base_name = os.path.splitext(os.path.basename(self.filename))[0]
-            self.table_name_entry.delete(0, tk.END)
-            self.table_name_entry.insert(0, base_name)
+        if self.headers is None or self.rows is None:
+            return
 
-            # Clear checkboxes
-            for widget in self.checkbox_frame.winfo_children():
-                widget.destroy()
-            for widget in self.where_clause_inner.winfo_children():
-                widget.destroy()
+        base_name = os.path.splitext(os.path.basename(self.filename))[0]
+        self.table_name_entry.delete(0, tk.END)
+        self.table_name_entry.insert(0, base_name)
 
-            self.column_vars.clear()
-            self.where_column_vars.clear()
-            self.value_overrides.clear()
+        # Clear checkboxes
+        for widget in self.checkbox_frame.winfo_children():
+            widget.destroy()
+        for widget in self.where_clause_inner.winfo_children():
+            widget.destroy()
 
-            for col in self.headers:
-                var = tk.BooleanVar(value=True)
-                where_var = tk.BooleanVar(value=True)
-                self.column_vars[col] = var
-                self.where_column_vars[col] = where_var
-                tk.Checkbutton(self.checkbox_frame, text=col, variable=var).pack(side=tk.LEFT)
-                tk.Checkbutton(self.where_clause_inner, text=col, variable=where_var).pack(side=tk.LEFT)
+        self.column_vars.clear()
+        self.where_column_vars.clear()
+        self.value_overrides.clear()
 
-            messagebox.showinfo("CSV Loaded", f"Loaded {len(self.rows)} rows from {base_name}.csv")
+        for col in self.headers:
+            var = tk.BooleanVar(value=True)
+            where_var = tk.BooleanVar(value=True)
+            self.column_vars[col] = var
+            self.where_column_vars[col] = where_var
+            tk.Checkbutton(self.checkbox_frame, text=col, variable=var).pack(side=tk.LEFT)
+            tk.Checkbutton(self.where_clause_inner, text=col, variable=where_var).pack(side=tk.LEFT)
 
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to read CSV: {e}")
+        messagebox.showinfo("File Loaded", f"Loaded {len(self.rows)} rows from {base_name}")
 
     def open_value_editor(self):
-        """Change values of selected columns for UPDATE queries"""
+        """Open dialog to edit SET values for UPDATE queries"""
         selected_cols = self.get_selected_columns()
         if not selected_cols:
             messagebox.showwarning("No Columns", "Please select at least one column first.")
@@ -149,10 +221,10 @@ class PythonQueryGenApp:
         editor.title("Edit SET Values for UPDATE Query")
         editor.geometry("500x400")
 
-        tk.Label(editor, text="Set custom values for UPDATE columns (leave blank to use CSV values)", 
+        tk.Label(editor, text="Set custom values for UPDATE columns (leave blank to use file values)", 
                  wraplength=450, pady=10).pack()
 
-        # Create frame
+        # Create scrollable frame
         canvas = tk.Canvas(editor)
         scrollbar = tk.Scrollbar(editor, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas)
@@ -165,7 +237,7 @@ class PythonQueryGenApp:
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
 
-        # Create fields for each column
+        # Create entry fields for each column
         entries = {}
         for col in selected_cols:
             frame = tk.Frame(scrollable_frame)
@@ -175,7 +247,7 @@ class PythonQueryGenApp:
             entry = tk.Entry(frame, width=30)
             entry.pack(side=tk.LEFT, padx=5)
             
-            # Pre-fill with existing info
+            # Pre-fill with existing override if available
             if col in self.value_overrides:
                 entry.insert(0, self.value_overrides[col])
             
@@ -257,7 +329,7 @@ class PythonQueryGenApp:
 
     def generate_sql(self):
         if not self.headers or not self.rows:
-            messagebox.showwarning("No Data", "Please load a CSV file first.")
+            messagebox.showwarning("No Data", "Please load a file first.")
             return
 
         selected_cols = self.get_selected_columns()
@@ -292,10 +364,11 @@ class PythonQueryGenApp:
         self.output.insert(tk.END, sql)
 
     def show_about_dialog(self):
+        xlsx_status = "Enabled" if XLSX_AVAILABLE else "Disabled (install openpyxl)"
         messagebox.showinfo("About Python QueryGen",
-                            "Version 0.7\n\n"
-                            "A simple SQL Query Builder using Python's Tkinter.\n"
-                            "Created by Hayden Hildreth.")
+                            f"Version 0.8\n\n"
+                            f"A simple SQL Query Builder using Python's Tkinter.\n"
+                            f"Created by Hayden Hildreth.")
 
     def open_help_dialog(self):
         webbrowser.open_new_tab("https://github.com/HaydenHildreth/PyQueryGen/")
