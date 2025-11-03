@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox, scrolledtext
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 import csv
 import os
 import webbrowser
@@ -7,7 +7,7 @@ import webbrowser
 class PythonQueryGenApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Python QueryGen v0.6")
+        self.root.title("Python QueryGen v0.7")
         self.root.geometry("1000x700")
 
         self.filename = None
@@ -15,6 +15,7 @@ class PythonQueryGenApp:
         self.rows = []
         self.column_vars = {}
         self.where_column_vars = {}
+        self.value_overrides = {}  # Store custom values for UPDATE
 
         self.setup_ui()
 
@@ -64,8 +65,11 @@ class PythonQueryGenApp:
         self.where_clause_canvas.create_window((0, 0), window=self.where_clause_inner, anchor='nw')
         self.where_clause_inner.bind("<Configure>", lambda e: self.where_clause_canvas.configure(scrollregion=self.where_clause_canvas.bbox("all")))
 
-        # Pack WHERE clause section (but it will be shown/hidden dynamically)
         self.where_clause_frame_outer.pack_forget()
+
+        # Edit Values Button (for UPDATE queries)
+        self.edit_values_button = tk.Button(self.root, text="Edit SET Values", command=self.open_value_editor)
+        self.edit_values_button.pack_forget()
 
         # Generate SQL button
         self.generate_button = tk.Button(self.root, text="Generate SQL", command=self.generate_sql)
@@ -91,8 +95,10 @@ class PythonQueryGenApp:
     def on_query_type_change(self, value):
         if value == "UPDATE":
             self.where_clause_frame_outer.pack(fill=tk.X, padx=10, pady=5, before=self.generate_button)
+            self.edit_values_button.pack(pady=5, before=self.generate_button)
         else:
             self.where_clause_frame_outer.pack_forget()
+            self.edit_values_button.pack_forget()
 
     def load_csv(self):
         self.filename = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
@@ -117,6 +123,7 @@ class PythonQueryGenApp:
 
             self.column_vars.clear()
             self.where_column_vars.clear()
+            self.value_overrides.clear()
 
             for col in self.headers:
                 var = tk.BooleanVar(value=True)
@@ -130,6 +137,75 @@ class PythonQueryGenApp:
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to read CSV: {e}")
+
+    def open_value_editor(self):
+        """Change values of selected columns for UPDATE queries"""
+        selected_cols = self.get_selected_columns()
+        if not selected_cols:
+            messagebox.showwarning("No Columns", "Please select at least one column first.")
+            return
+
+        editor = tk.Toplevel(self.root)
+        editor.title("Edit SET Values for UPDATE Query")
+        editor.geometry("500x400")
+
+        tk.Label(editor, text="Set custom values for UPDATE columns (leave blank to use CSV values)", 
+                 wraplength=450, pady=10).pack()
+
+        # Create frame
+        canvas = tk.Canvas(editor)
+        scrollbar = tk.Scrollbar(editor, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Create fields for each column
+        entries = {}
+        for col in selected_cols:
+            frame = tk.Frame(scrollable_frame)
+            frame.pack(fill=tk.X, padx=10, pady=5)
+            
+            tk.Label(frame, text=f"{col}:", width=20, anchor='w').pack(side=tk.LEFT)
+            entry = tk.Entry(frame, width=30)
+            entry.pack(side=tk.LEFT, padx=5)
+            
+            # Pre-fill with existing info
+            if col in self.value_overrides:
+                entry.insert(0, self.value_overrides[col])
+            
+            entries[col] = entry
+
+        canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        scrollbar.pack(side="right", fill="y")
+
+        # Buttons
+        button_frame = tk.Frame(editor)
+        button_frame.pack(pady=10)
+
+        def save_values():
+            for col, entry in entries.items():
+                value = entry.get().strip()
+                if value:
+                    self.value_overrides[col] = value
+                elif col in self.value_overrides:
+                    del self.value_overrides[col]
+            editor.destroy()
+            messagebox.showinfo("Saved", "Custom values saved for UPDATE query.")
+
+        def clear_all():
+            for entry in entries.values():
+                entry.delete(0, tk.END)
+            self.value_overrides.clear()
+
+        tk.Button(button_frame, text="Save", command=save_values, width=10).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="Clear All", command=clear_all, width=10).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="Cancel", command=editor.destroy, width=10).pack(side=tk.LEFT, padx=5)
 
     def get_selected_columns(self):
         return [col for col, var in self.column_vars.items() if var.get()]
@@ -156,11 +232,10 @@ class PythonQueryGenApp:
         return f"SELECT {', '.join(columns)} FROM {table_name};"
 
     def generate_update_query(self, table_name, columns, where_columns):
-        col_indexes = [self.headers.index(col) for col in columns]
         queries = []
         for row in self.rows:
             set_clause = ", ".join(
-                f"{col} = '{self.escape_value(row[self.headers.index(col)])}'"
+                f"{col} = '{self.escape_value(self.value_overrides.get(col, row[self.headers.index(col)]))}'"
                 for col in columns
             )
             where_clause = " AND ".join(
@@ -218,7 +293,7 @@ class PythonQueryGenApp:
 
     def show_about_dialog(self):
         messagebox.showinfo("About Python QueryGen",
-                            "Version 0.6\n\n"
+                            "Version 0.7\n\n"
                             "A simple SQL Query Builder using Python's Tkinter.\n"
                             "Created by Hayden Hildreth.")
 
