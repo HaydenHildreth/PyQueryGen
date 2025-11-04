@@ -1,7 +1,7 @@
 # PyQueryGen
 
 ## What is PyQueryGen
-A simple, and easy to use program to quickly write SQL scripts from a .CSV file. The .CSV file should be modified **ahead of time** so that the data is ready to be imported, updated, deleted, etc... This program is not for **modifying** database data, simply for building the scripts to enter, update, delete, etc. data from the database.
+A simple, and easy to use program to quickly write SQL scripts from a .CSV/.XLSX file. The .CSV/.XLSX file should be modified **ahead of time** so that the data is ready to be imported, updated, deleted, etc... This program is not for **modifying** database data, simply for building the scripts to enter, update, delete, etc. data from the database.
 
 ## Screenshots
 ![Screenshot 1](/assets/images/preview1.png "Insert Query")
